@@ -1,6 +1,22 @@
 const db = require("../models");
 const Tutorial = db.tutorials;
 const Op = db.Sequelize.Op;
+
+const getPagination = (page, size) => {
+  const limit = size ? +size : 5;
+  const offset = page ? page * limit : 0;
+
+  return { limit, offset };
+};
+
+const getPagingData = (data, page, limit) => {
+  const { count: totalItems, rows: tutorials } = data;
+  const currentPage = page ? +page : 0;
+  const totalPages = Math.ceil(totalItems / limit);
+
+  return { totalItems, tutorials, totalPages, currentPage };
+};
+
 // Create and Save a new Tutorial
 exports.create = (req, res) => {
   // Validate request
@@ -10,12 +26,14 @@ exports.create = (req, res) => {
     });
     return;
   }
+
   // Create a Tutorial
   const tutorial = {
     title: req.body.title,
     description: req.body.description,
     published: req.body.published ? req.body.published : false
   };
+
   // Save Tutorial in the database
   Tutorial.create(tutorial)
     .then(data => {
@@ -28,13 +46,18 @@ exports.create = (req, res) => {
       });
     });
 };
+
 // Retrieve all Tutorials from the database.
 exports.findAll = (req, res) => {
-  const title = req.query.title;
+  const { page, size, title } = req.query;
   var condition = title ? { title: { [Op.like]: `%${title}%` } } : null;
-  Tutorial.findAll({ where: condition })
+
+  const { limit, offset } = getPagination(page, size);
+
+  Tutorial.findAndCountAll({ where: condition, limit, offset })
     .then(data => {
-      res.send(data);
+      const response = getPagingData(data, page, limit);
+      res.send(response);
     })
     .catch(err => {
       res.status(500).send({
@@ -43,18 +66,14 @@ exports.findAll = (req, res) => {
       });
     });
 };
+
 // Find a single Tutorial with an id
 exports.findOne = (req, res) => {
   const id = req.params.id;
+
   Tutorial.findByPk(id)
     .then(data => {
-      if (data) {
-        res.send(data);
-      } else {
-        res.status(404).send({
-          message: `Cannot find Tutorial with id=${id}.`
-        });
-      }
+      res.send(data);
     })
     .catch(err => {
       res.status(500).send({
@@ -62,9 +81,11 @@ exports.findOne = (req, res) => {
       });
     });
 };
+
 // Update a Tutorial by the id in the request
 exports.update = (req, res) => {
   const id = req.params.id;
+
   Tutorial.update(req.body, {
     where: { id: id }
   })
@@ -85,9 +106,11 @@ exports.update = (req, res) => {
       });
     });
 };
+
 // Delete a Tutorial with the specified id in the request
 exports.delete = (req, res) => {
   const id = req.params.id;
+
   Tutorial.destroy({
     where: { id: id }
   })
@@ -108,6 +131,7 @@ exports.delete = (req, res) => {
       });
     });
 };
+
 // Delete all Tutorials from the database.
 exports.deleteAll = (req, res) => {
   Tutorial.destroy({
@@ -124,11 +148,16 @@ exports.deleteAll = (req, res) => {
       });
     });
 };
-// Find all published Tutorials
+
+// find all published Tutorial
 exports.findAllPublished = (req, res) => {
-  Tutorial.findAll({ where: { published: true } })
+  const { page, size } = req.query;
+  const { limit, offset } = getPagination(page, size);
+
+  Tutorial.findAndCountAll({ where: { published: true }, limit, offset })
     .then(data => {
-      res.send(data);
+      const response = getPagingData(data, page, limit);
+      res.send(response);
     })
     .catch(err => {
       res.status(500).send({
